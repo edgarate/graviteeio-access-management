@@ -18,12 +18,13 @@ package io.gravitee.am.gateway.handler.common.auth.impl;
 import io.gravitee.am.common.oauth2.Parameters;
 import io.gravitee.am.gateway.handler.common.auth.UserAuthenticationManager;
 import io.gravitee.am.gateway.handler.common.auth.idp.IdentityProviderManager;
+import io.gravitee.am.gateway.handler.common.authentication.AuthenticationDetails;
+import io.gravitee.am.gateway.handler.common.authentication.event.AuthenticationEvent;
 import io.gravitee.am.identityprovider.api.Authentication;
 import io.gravitee.am.identityprovider.api.DefaultUser;
 import io.gravitee.am.model.Client;
 import io.gravitee.am.model.Domain;
 import io.gravitee.am.model.User;
-import io.gravitee.am.service.AuditService;
 import io.gravitee.am.service.RoleService;
 import io.gravitee.am.service.UserService;
 import io.gravitee.am.service.exception.UserNotFoundException;
@@ -31,8 +32,7 @@ import io.gravitee.am.service.exception.authentication.AccountDisabledException;
 import io.gravitee.am.service.exception.authentication.BadCredentialsException;
 import io.gravitee.am.service.exception.authentication.InternalAuthenticationServiceException;
 import io.gravitee.am.service.exception.authentication.UsernameNotFoundException;
-import io.gravitee.am.service.reporter.builder.AuditBuilder;
-import io.gravitee.am.service.reporter.builder.AuthenticationAuditBuilder;
+import io.gravitee.common.event.EventManager;
 import io.reactivex.Maybe;
 import io.reactivex.Observable;
 import io.reactivex.Single;
@@ -71,7 +71,7 @@ public class UserAuthenticationManagerImpl implements UserAuthenticationManager 
     private IdentityProviderManager identityProviderManager;
 
     @Autowired
-    private AuditService auditService;
+    private EventManager eventManager;
 
     @Override
     public Single<User> authenticate(Client client, Authentication authentication) {
@@ -117,8 +117,8 @@ public class UserAuthenticationManagerImpl implements UserAuthenticationManager 
                     }
                     return user;
                 })
-                .doOnSuccess(user -> auditService.report(AuditBuilder.builder(AuthenticationAuditBuilder.class).principal(authentication).domain(domain.getId()).client(client).user(user)))
-                .doOnError(throwable -> auditService.report(AuditBuilder.builder(AuthenticationAuditBuilder.class).principal(authentication).domain(domain.getId()).client(client).throwable(throwable)));
+                .doOnSuccess(user -> eventManager.publishEvent(AuthenticationEvent.SUCCESS, new AuthenticationDetails(authentication, domain, client, user)))
+                .doOnError(throwable -> eventManager.publishEvent(AuthenticationEvent.FAILURE, new AuthenticationDetails(authentication, domain, client, throwable)));
     }
 
     @Override
